@@ -1,4 +1,10 @@
+require('dotenv').config();
+
 const express = require('express');
+const { getDb } = require('./db');
+
+getDb();
+
 const app = express();
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
