@@ -1,4 +1,4 @@
-const BASE = 'http://localhost:3001/api';
+const BASE = '/api';
 
 async function request(method, path, body) {
   const opts = {
@@ -28,12 +28,10 @@ async function request(method, path, body) {
 }
 
 export const api = {
-  // Auth
   restoreSession: () => request('GET', '/auth/me'),
   signIn: (email, name) => request('POST', '/auth', { email, name }),
   signOut: () => request('POST', '/auth/signout'),
 
-  // Projects
   listProjects: () => request('GET', '/projects'),
   getProject: (id) => request('GET', `/projects/${id}`),
   getBookText: (id) => request('GET', `/projects/${id}/book_text`),
@@ -47,13 +45,11 @@ export const api = {
     return request('POST', '/projects', { title, book_text: bookText });
   },
 
-  // Steps
   runStep: (projectId, stepKey, opts = {}) =>
     request('POST', `/projects/${projectId}/steps/${stepKey}/run`, opts),
   retryStep: (projectId, stepKey) =>
     request('POST', `/projects/${projectId}/steps/${stepKey}/retry`),
 
-  // Images
   imageUrl: (projectId, filePath) => {
     if (!filePath) return null;
     const filename = filePath.split('/').pop();

@@ -6,6 +6,7 @@ const path = require('path');
 
 const authRoutes = require('./routes/auth');
 const projectRoutes = require('./routes/projects');
+const { imageStoragePath, resolveStoredImagePath } = require('./paths');
 
 const app = express();
 
@@ -33,11 +34,29 @@ app.get('/api/images/:projectId/:file', (req, res) => {
     if (!project) {
       return res.status(404).json({ error: 'Not found' });
     }
-    const imagesBase = process.env.IMAGES_DIR || '../data/images';
-    const filePath = path.resolve(imagesBase, req.params.projectId, req.params.file);
-    if (!fs.existsSync(filePath)) {
+
+    const candidates = [
+      imageStoragePath(req.params.projectId, req.params.file),
+      resolveStoredImagePath(path.join('data', 'images', req.params.projectId, req.params.file)),
+    ];
+
+    const filePath = candidates.find((candidate) => fs.existsSync(candidate));
+    if (!filePath) {
       return res.status(404).json({ error: 'Image not found' });
     }
+
+    const ext = path.extname(filePath).toLowerCase();
+    const contentTypes = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.webp': 'image/webp',
+      '.gif': 'image/gif',
+    };
+    if (contentTypes[ext]) {
+      res.type(contentTypes[ext]);
+    }
+
     res.sendFile(filePath);
   });
 });

@@ -9,8 +9,8 @@ export default function AuthForm({ onSignIn }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!name.trim() || !email.trim()) {
-      setError('Both name and email are required.');
+    if (!name.trim() || !email.trim() || !email.includes('@')) {
+      setError('Enter your name and a valid email to continue.');
       return;
     }
     setLoading(true);
@@ -26,62 +26,31 @@ export default function AuthForm({ onSignIn }) {
   }
 
   return (
-    <div className="page page--narrow" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '100vh', margin: '0 auto' }}>
-      <div style={{ marginBottom: '2.5rem', textAlign: 'center' }}>
-        <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📖</div>
-        <h1 style={{ fontSize: '1.75rem', marginBottom: '0.375rem' }}>Book Illustrator</h1>
-        <p style={{ fontSize: '0.9375rem' }}>Turn your story into an illustrated book with AI</p>
-      </div>
+    <div className="center-page">
+      <div className="auth-card">
+        <div className="logo-row">📖</div>
+        <h3 style={{ textAlign: 'center', fontSize: 20 }}>Book Illustration Studio</h3>
+        <p className="lede">Enter your details to start or resume an illustration project.</p>
 
-      <div className="card">
-        <h2 style={{ marginBottom: '1.25rem', fontSize: '1.125rem' }}>Sign in to continue</h2>
-
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div className="field">
-            <label htmlFor="auth-name">Your name</label>
-            <input
-              id="auth-name"
-              className="input"
-              type="text"
-              placeholder="Ada Lovelace"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              autoFocus
-            />
+        <form onSubmit={handleSubmit}>
+          <div className="gd-field">
+            <label htmlFor="f-name">Full name <span className="req">*</span></label>
+            <input id="f-name" placeholder="Mira Hassan" value={name} onChange={e => setName(e.target.value)} autoFocus />
           </div>
-
-          <div className="field">
-            <label htmlFor="auth-email">Email address</label>
-            <input
-              id="auth-email"
-              className="input"
-              type="email"
-              placeholder="ada@example.com"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-            />
+          <div className="gd-field">
+            <label htmlFor="f-email">Email <span className="req">*</span></label>
+            <input id="f-email" type="email" placeholder="mira@example.com" value={email} onChange={e => setEmail(e.target.value)} />
           </div>
-
-          {error && (
-            <div className="error-banner">
-              <p>{error}</p>
-            </div>
-          )}
-
-          <button
-            id="btn-signin"
-            type="submit"
-            className="btn btn--primary btn--lg btn--full"
-            disabled={loading}
-          >
-            {loading ? <><span className="spinner spinner--sm" />Signing in…</> : 'Continue →'}
+          <div className="auth-error">{error}</div>
+          <button id="btn-signin" type="submit" className="gd-btn gd-btn-primary" disabled={loading}>
+            {loading ? <><span className="spinner sm" />Signing in…</> : <>Continue <span className="gd-arrow">→</span></>}
           </button>
         </form>
-      </div>
 
-      <p className="text-muted mt-2" style={{ textAlign: 'center', fontSize: '0.8rem' }}>
-        No password needed — we identify you by email.
-      </p>
+        <p className="meta" style={{ textAlign: 'center', marginTop: 14, marginBottom: 0 }}>
+          No password — using an email that already has projects resumes them exactly where you left off.
+        </p>
+      </div>
     </div>
   );
 }

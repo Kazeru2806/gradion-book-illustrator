@@ -2,9 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../api.js';
 import Stepper from './Stepper.jsx';
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-const STEP_SEQUENCE = ['style', 'characters', 'portraits', 'chapters', 'illustrations'];
 const STEP_LABELS = {
   style: 'Style',
   characters: 'Characters',
@@ -12,6 +9,7 @@ const STEP_LABELS = {
   chapters: 'Chapters',
   illustrations: 'Illustrations',
 };
+
 const STATUS_TO_CURRENT_STEP = {
   CREATED: 'style',
   STYLE_SET: 'characters',
@@ -22,85 +20,45 @@ const STATUS_TO_CURRENT_STEP = {
 };
 
 function currentStep(project) {
-  if (project.step_state === 'failed') {
-    return STATUS_TO_CURRENT_STEP[project.status] ?? null;
-  }
   return STATUS_TO_CURRENT_STEP[project.status] ?? null;
 }
-
-// ── Book Text Modal ────────────────────────────────────────────────────────
 
 function BookModal({ text, onClose }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <div className="modal__header">
-          <h3>Book Text</h3>
-          <button className="btn btn--ghost btn--sm" onClick={onClose} aria-label="Close">✕</button>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h4>Book Text</h4>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
-        <div className="modal__body">
-          <pre>{text}</pre>
-        </div>
+        <div className="modal-body">{text}</div>
       </div>
     </div>
   );
 }
 
-// ── Character Card ─────────────────────────────────────────────────────────
-
-function CharacterCard({ character, projectId }) {
-  const imgUrl = api.imageUrl(projectId, character.portrait_path);
+function EntityCard({ title, prompt, imageUrl, aspect = 'portrait', pendingLabel, tags = [] }) {
   const [imgError, setImgError] = useState(false);
+  const artClass = aspect === 'chapter' ? 'art chapter' : 'art';
 
   return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-      {imgUrl && !imgError ? (
-        <img
-          className="portrait-img"
-          src={imgUrl}
-          alt={`Portrait of ${character.name}`}
-          onError={() => setImgError(true)}
-        />
-      ) : (
-        <div className="portrait-placeholder">
-          {character.portrait_path ? '🖼️ Loading…' : '⏳ Pending'}
-        </div>
-      )}
-      <div>
-        <h4>{character.name}</h4>
-        <p className="text-sm mt-1" style={{ lineHeight: '1.5' }}>{character.prompt}</p>
+    <div className="entity-card">
+      <div className={`${artClass}${!imageUrl || imgError ? ' pending' : ''}`}>
+        {imageUrl && !imgError ? (
+          <img src={imageUrl} alt={title} onError={() => setImgError(true)} />
+        ) : (
+          <span className={`placeholder-label${imageUrl ? '' : ' muted'}`}>
+            {imageUrl ? 'Loading…' : pendingLabel}
+          </span>
+        )}
       </div>
-    </div>
-  );
-}
-
-// ── Chapter Card ───────────────────────────────────────────────────────────
-
-function ChapterCard({ chapter, projectId }) {
-  const imgUrl = api.imageUrl(projectId, chapter.illustration_path);
-  const [imgError, setImgError] = useState(false);
-
-  return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-      {imgUrl && !imgError ? (
-        <img
-          className="illustration-img"
-          src={imgUrl}
-          alt={`Illustration for ${chapter.name}`}
-          onError={() => setImgError(true)}
-        />
-      ) : (
-        <div className="illustration-placeholder">
-          {chapter.illustration_path ? '🖼️ Loading…' : '⏳ Pending'}
-        </div>
-      )}
-      <div>
-        <h4>{chapter.name}</h4>
-        <p className="text-sm mt-1" style={{ lineHeight: '1.5' }}>{chapter.prompt}</p>
-        {chapter.character_names?.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem', marginTop: '0.625rem' }}>
-            {chapter.character_names.map(n => (
-              <span key={n} className="pill pill--draft" style={{ fontSize: '0.7rem' }}>{n}</span>
+      <div className="body">
+        <h5>{title}</h5>
+        <p>{prompt}</p>
+        {tags.length > 0 && (
+          <div className="char-tags">
+            {tags.map((tag) => (
+              <span key={tag} className="char-tag">{tag}</span>
             ))}
           </div>
         )}
@@ -108,8 +66,6 @@ function ChapterCard({ chapter, projectId }) {
     </div>
   );
 }
-
-// ── Step Action Panel ──────────────────────────────────────────────────────
 
 function StepActionPanel({ project, onRun, onRetry }) {
   const step = currentStep(project);
@@ -119,13 +75,13 @@ function StepActionPanel({ project, onRun, onRetry }) {
   if (!step || project.status === 'DONE') return null;
 
   const isRunning = project.step_state === 'running';
-  const isFailed  = project.step_state === 'failed';
-  const isStuck   = project.stuck;
+  const isFailed = project.step_state === 'failed';
+  const isStuck = project.stuck;
 
   async function handleRun() {
     setBusy(true);
     try {
-      await onRun(step, step === 'style' ? { style: styleInput } : {});
+      await onRun(step, step === 'style' && styleInput.trim() ? { style: styleInput.trim() } : {});
     } finally {
       setBusy(false);
     }
@@ -141,91 +97,78 @@ function StepActionPanel({ project, onRun, onRetry }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
-      {/* Error banner */}
+    <div className="step-panel">
       {isFailed && project.error_message && (
-        <div className="error-banner">
-          <p>
-            <strong>Step failed:</strong>{' '}
-            {project.error_message.split('\n')[0]}
-          </p>
+        <div className="error-panel" style={{ marginBottom: 16 }}>
+          <p><strong>{STEP_LABELS[step]} failed:</strong> {project.error_message.split('\n')[0]}</p>
           <button
             id={`btn-retry-${step}`}
-            className="btn btn--danger btn--sm"
+            type="button"
+            className="gd-btn gd-btn-secondary gd-btn-sm"
             onClick={handleRetry}
             disabled={busy}
           >
-            {busy ? <><span className="spinner spinner--sm" />Retrying…</> : `↻ Retry ${STEP_LABELS[step]}`}
+            {busy ? <>Retrying…</> : `↻ Retry ${STEP_LABELS[step]}`}
           </button>
         </div>
       )}
 
-      {/* Stuck banner */}
       {isStuck && !isFailed && (
-        <div className="stuck-banner">
+        <div className="stuck-panel" style={{ marginBottom: 16 }}>
           <p>
-            ⚠️ The <strong>{STEP_LABELS[step]}</strong> step appears stuck (running for over 5 minutes).
+            The <strong>{STEP_LABELS[step]}</strong> step appears stuck (running for over 5 minutes).
           </p>
           <button
             id={`btn-force-retry-${step}`}
-            className="btn btn--ghost btn--sm"
+            type="button"
+            className="gd-btn gd-btn-ghost gd-btn-sm"
             onClick={handleRetry}
             disabled={busy}
           >
-            {busy ? <><span className="spinner spinner--sm" />Retrying…</> : '↻ Force Retry'}
+            {busy ? <>Retrying…</> : '↻ Force Retry'}
           </button>
         </div>
       )}
 
-      {/* Running indicator */}
       {isRunning && !isStuck && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '0.75rem',
-          padding: '0.875rem 1rem',
-          background: 'var(--blue-dim)',
-          border: '1px solid rgba(59,130,246,0.3)',
-          borderRadius: 'var(--radius-md)',
-        }}>
-          <span className="spinner" style={{ borderTopColor: 'var(--blue)' }} />
-          <span style={{ color: 'var(--blue)', fontSize: '0.9rem' }}>
-            Running <strong>{STEP_LABELS[step]}</strong>… this may take a minute
-          </span>
+        <div className="status-line">
+          <span className="spinner sm" />
+          Running <strong>{STEP_LABELS[step]}</strong>… this may take a minute
         </div>
       )}
 
-      {/* Run button (idle) */}
       {!isRunning && !isFailed && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <>
           {step === 'style' && (
-            <div className="field">
-              <label htmlFor="style-input">Custom style <span className="text-muted">(optional — leave blank to auto-generate)</span></label>
+            <div className="gd-field style-input-wrap">
+              <label htmlFor="style-input">
+                Custom style <span className="meta">(optional — leave blank to auto-generate)</span>
+              </label>
               <input
                 id="style-input"
-                className="input"
-                placeholder="e.g. Bright Pixar-style 3D render with vivid colors…"
+                placeholder="e.g. Warm watercolor storybook with soft pencil outlines…"
                 value={styleInput}
-                onChange={e => setStyleInput(e.target.value)}
+                onChange={(e) => setStyleInput(e.target.value)}
               />
             </div>
           )}
           <button
             id={`btn-run-${step}`}
-            className="btn btn--primary"
+            type="button"
+            className="gd-btn gd-btn-primary"
             onClick={handleRun}
             disabled={busy}
-            style={{ alignSelf: 'flex-start' }}
           >
-            {busy
-              ? <><span className="spinner spinner--sm" />Starting…</>
-              : `▶ Run ${STEP_LABELS[step]}`}
+            {busy ? <>Starting…</> : <>▶ Run {STEP_LABELS[step]}</>}
           </button>
-        </div>
+          <p className="help" style={{ marginTop: 12 }}>
+            Each step calls Gemini once. Image steps can take 30–90 seconds.
+          </p>
+        </>
       )}
     </div>
   );
 }
-
-// ── Project Detail ─────────────────────────────────────────────────────────
 
 export default function ProjectDetail({ projectId, onBack }) {
   const [project, setProject] = useState(null);
@@ -238,6 +181,7 @@ export default function ProjectDetail({ projectId, onBack }) {
     try {
       const data = await api.getProject(projectId);
       setProject(data.project);
+      setLoadError('');
       return data.project;
     } catch (err) {
       setLoadError(err.message);
@@ -245,31 +189,61 @@ export default function ProjectDetail({ projectId, onBack }) {
     }
   }, [projectId]);
 
-  // Poll while running
   useEffect(() => {
     load();
-
-    function startPoll() {
-      stopPoll();
-      pollRef.current = setInterval(async () => {
-        const p = await load();
-        if (!p || p.step_state !== 'running') stopPoll();
-      }, 3000);
-    }
-
-    function stopPoll() {
-      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-    }
-
-    // Check after first load whether we need to poll
-    load().then(p => {
-      if (p?.step_state === 'running') startPoll();
-    });
-
-    return stopPoll;
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
   }, [load]);
 
-  // Fetch book text lazily when modal opens
+  useEffect(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (project?.step_state !== 'running') return undefined;
+
+    pollRef.current = setInterval(() => {
+      load();
+    }, 3000);
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = null;
+    };
+  }, [project?.step_state, load]);
+
+  async function applyStepResponse(data) {
+    if (data?.project) {
+      setProject(data.project);
+    } else {
+      await load();
+    }
+  }
+
+  async function handleRun(stepKey, opts) {
+    try {
+      const data = await api.runStep(projectId, stepKey, opts);
+      await applyStepResponse(data);
+    } catch (err) {
+      if (err.data?.project) {
+        setProject(err.data.project);
+      } else {
+        await load();
+      }
+    }
+  }
+
+  async function handleRetry(stepKey) {
+    try {
+      const data = await api.retryStep(projectId, stepKey);
+      await applyStepResponse(data);
+    } catch (err) {
+      if (err.data?.project) {
+        setProject(err.data.project);
+      } else {
+        await load();
+      }
+    }
+  }
+
   async function handleShowBook() {
     if (!bookText) {
       try {
@@ -282,154 +256,120 @@ export default function ProjectDetail({ projectId, onBack }) {
     setShowBook(true);
   }
 
-  async function handleRun(stepKey, opts) {
-    await api.runStep(projectId, stepKey, opts);
-    const p = await load();
-    // Start polling if step is now running
-    if (p?.step_state === 'running') {
-      clearInterval(pollRef.current);
-      pollRef.current = setInterval(async () => {
-        const fresh = await load();
-        if (!fresh || fresh.step_state !== 'running') {
-          clearInterval(pollRef.current);
-          pollRef.current = null;
-        }
-      }, 3000);
-    }
-  }
-
-  async function handleRetry(stepKey) {
-    await api.retryStep(projectId, stepKey);
-    const p = await load();
-    if (p?.step_state === 'running') {
-      clearInterval(pollRef.current);
-      pollRef.current = setInterval(async () => {
-        const fresh = await load();
-        if (!fresh || fresh.step_state !== 'running') {
-          clearInterval(pollRef.current);
-          pollRef.current = null;
-        }
-      }, 3000);
-    }
-  }
-
   if (loadError) {
     return (
-      <div className="page">
-        <button className="back-link" onClick={onBack}>← Back</button>
-        <div className="error-banner"><p>{loadError}</p></div>
+      <div className="app-body">
+        <button type="button" className="back-link" onClick={onBack}>← Projects</button>
+        <div className="error-panel"><p>{loadError}</p></div>
       </div>
     );
   }
 
   if (!project) {
     return (
-      <div className="page" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', paddingTop: '4rem' }}>
-        <span className="spinner spinner--lg" />
-        <p className="text-muted">Loading project…</p>
+      <div className="page-loading">
+        <span className="spinner lg" />
+        Loading project…
       </div>
     );
   }
 
-  const isDone = project.status === 'DONE';
+  const step = currentStep(project);
 
   return (
     <>
-      <nav className="topnav">
-        <button className="back-link" onClick={onBack} style={{ margin: 0 }}>← Projects</button>
-        <button className="btn btn--ghost btn--sm" onClick={handleShowBook} id="btn-view-book">
-          📄 View Book
-        </button>
+      <nav className="gd-nav">
+        <div className="gd-nav-inner">
+          <button type="button" className="back-link" onClick={onBack} style={{ margin: 0 }}>← Projects</button>
+          <div style={{ marginLeft: 'auto' }}>
+            <button type="button" className="gd-btn gd-btn-ghost gd-btn-sm" onClick={handleShowBook} id="btn-view-book">
+              View book text
+            </button>
+          </div>
+        </div>
       </nav>
 
       {showBook && <BookModal text={bookText ?? '…'} onClose={() => setShowBook(false)} />}
 
-      <div className="page">
-        {/* Header */}
-        <div style={{ marginBottom: '1.75rem' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', marginBottom: '0.25rem' }}>
-            <h1 style={{ fontSize: '1.625rem' }}>{project.title}</h1>
-            {isDone && <span className="pill pill--done">✓ Done</span>}
+      <div className="app-body">
+        <div className="panel-title">
+          <div>
+            <h2 style={{ marginBottom: 4 }}>{project.title}</h2>
+            <p className="meta">Created {new Date(project.created_at).toLocaleDateString()}</p>
           </div>
-          <p className="text-muted text-sm">
-            Project ID: <code>{project.id}</code>
-          </p>
+          {project.status === 'DONE' && <span className="gd-pill ink">Done</span>}
         </div>
 
-        {/* Stepper */}
         <Stepper project={project} />
 
-        {/* Action Panel */}
-        <StepActionPanel
-          project={project}
-          onRun={handleRun}
-          onRetry={handleRetry}
-        />
+        <div className="detail-grid">
+          <div>
+            {(project.characters?.length > 0 || project.chapters?.length > 0) && (
+              <>
+                {project.characters?.length > 0 && (
+                  <section style={{ marginBottom: 32 }}>
+                    <h3 style={{ fontSize: 16, marginBottom: 16 }}>Characters</h3>
+                    <div className="entity-grid">
+                      {project.characters.map((character) => (
+                        <EntityCard
+                          key={character.id}
+                          title={character.name}
+                          prompt={character.prompt}
+                          imageUrl={api.imageUrl(project.id, character.portrait_path)}
+                          pendingLabel="Portrait pending"
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
 
-        {/* Style */}
-        {project.style && (
-          <>
-            <div className="divider" />
-            <section>
-              <h2 style={{ marginBottom: '0.75rem', fontSize: '1rem' }}>🎨 Illustration Style</h2>
-              <div className="card card--glass">
-                <p style={{ color: 'var(--text-primary)', fontStyle: 'italic', lineHeight: '1.7' }}>
-                  "{project.style}"
-                </p>
+                {project.chapters?.length > 0 && (
+                  <section>
+                    <h3 style={{ fontSize: 16, marginBottom: 16 }}>Chapters</h3>
+                    <div className="entity-grid">
+                      {project.chapters.map((chapter) => (
+                        <EntityCard
+                          key={chapter.id}
+                          title={chapter.name}
+                          prompt={chapter.prompt}
+                          imageUrl={api.imageUrl(project.id, chapter.illustration_path)}
+                          aspect="chapter"
+                          pendingLabel="Illustration pending"
+                          tags={chapter.character_names ?? []}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </>
+            )}
+
+            {project.status === 'DONE' && (
+              <div className="side-note" style={{ marginTop: 24, textAlign: 'center' }}>
+                <h5>Complete</h5>
+                <p>All five pipeline steps finished successfully.</p>
               </div>
-            </section>
-          </>
-        )}
+            )}
+          </div>
 
-        {/* Characters */}
-        {project.characters?.length > 0 && (
-          <>
-            <div className="divider" />
-            <section>
-              <h2 style={{ marginBottom: '1rem', fontSize: '1rem' }}>
-                👥 Characters <span className="text-muted" style={{ fontWeight: 400, fontSize: '0.875rem' }}>({project.characters.length})</span>
-              </h2>
-              <div className="grid-2">
-                {project.characters.map(c => (
-                  <CharacterCard key={c.id} character={c} projectId={project.id} />
-                ))}
+          <div>
+            <StepActionPanel project={project} onRun={handleRun} onRetry={handleRetry} />
+
+            {project.style && (
+              <div className="side-note" style={{ marginTop: 16 }}>
+                <h5>Illustration style</h5>
+                <p style={{ fontStyle: 'italic' }}>"{project.style}"</p>
               </div>
-            </section>
-          </>
-        )}
+            )}
 
-        {/* Chapters */}
-        {project.chapters?.length > 0 && (
-          <>
-            <div className="divider" />
-            <section>
-              <h2 style={{ marginBottom: '1rem', fontSize: '1rem' }}>
-                📖 Chapters <span className="text-muted" style={{ fontWeight: 400, fontSize: '0.875rem' }}>({project.chapters.length})</span>
-              </h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {project.chapters.map(ch => (
-                  <ChapterCard key={ch.id} chapter={ch} projectId={project.id} />
-                ))}
+            {step && project.step_state === 'idle' && project.status !== 'DONE' && (
+              <div className="side-note" style={{ marginTop: 16 }}>
+                <h5>Next step</h5>
+                <p>Run <strong>{STEP_LABELS[step]}</strong> when you're ready.</p>
               </div>
-            </section>
-          </>
-        )}
-
-        {isDone && (
-          <>
-            <div className="divider" />
-            <div style={{
-              textAlign: 'center', padding: '2rem',
-              background: 'var(--green-dim)',
-              border: '1px solid rgba(34,197,94,0.25)',
-              borderRadius: 'var(--radius-lg)',
-            }}>
-              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🎉</div>
-              <h3 style={{ color: 'var(--green)', marginBottom: '0.375rem' }}>All done!</h3>
-              <p className="text-muted">Your illustrated book is complete.</p>
-            </div>
-          </>
-        )}
+            )}
+          </div>
+        </div>
       </div>
     </>
   );

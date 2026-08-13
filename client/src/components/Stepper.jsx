@@ -1,51 +1,49 @@
 const STEPS = ['Style', 'Characters', 'Portraits', 'Chapters', 'Illustrations'];
-
 const STATUS_TO_INDEX = {
-  CREATED: -1,
-  STYLE_SET: 0,
-  CHARACTERS_GENERATED: 1,
-  PORTRAITS_GENERATED: 2,
-  CHAPTERS_GENERATED: 3,
-  DONE: 4,
+  CREATED: -1, STYLE_SET: 0, CHARACTERS_GENERATED: 1,
+  PORTRAITS_GENERATED: 2, CHAPTERS_GENERATED: 3, DONE: 4,
 };
 
-/**
- * @param {{ status: string, step_state: string }} project
- */
 export default function Stepper({ project }) {
   const completedUpTo = STATUS_TO_INDEX[project.status] ?? -1;
   const isRunning = project.step_state === 'running';
-  const isFailed = project.step_state === 'failed';
-
-  // Which step index is currently active (running/failed)?
-  // The "active" step is the next one after completed.
+  const isFailed  = project.step_state === 'failed';
   const activeIndex = completedUpTo + 1;
 
   return (
     <div className="stepper" role="list" aria-label="Pipeline steps">
       {STEPS.map((label, i) => {
-        const isDone = i <= completedUpTo;
-        const isActive = i === activeIndex && (isRunning || isFailed || project.status !== 'DONE');
-        const isCurrent = i === activeIndex;
+        const done = i <= completedUpTo;
+        const isCurrent = i === activeIndex && project.status !== 'DONE';
         const failed = isCurrent && isFailed;
         const running = isCurrent && isRunning;
 
-        let stepClass = 'stepper-step';
-        if (isDone) stepClass += ' stepper-step--done';
-        else if (failed) stepClass += ' stepper-step--failed';
-        else if (isActive) stepClass += ' stepper-step--active';
+        let cls = 'step';
+        if (done) cls += ' done';
+        else if (isCurrent) cls += ' current';
+        else cls += ' pending';
+
+        let sq;
+        if (done) {
+          sq = <span className="gd-num-square done" aria-label={`${label} complete`}>✓</span>;
+        } else if (running) {
+          sq = <span className="gd-num-square current"><span className="spinner sm" style={{ borderTopColor: '#FF6B00' }} /></span>;
+        } else if (failed) {
+          sq = <span className="gd-num-square" style={{ background: '#3A160A' }}>!</span>;
+        } else {
+          sq = <span className={`gd-num-square ${isCurrent ? '' : 'gray'}`}>{i + 1}</span>;
+        }
 
         return (
-          <div key={label} className={stepClass} role="listitem">
-            <div className="stepper-step__connector">
-              {i > 0 && <div className="stepper-step__line" />}
-              <div className="stepper-step__circle" aria-label={`Step ${i + 1}: ${label} — ${isDone ? 'done' : running ? 'running' : failed ? 'failed' : 'pending'}`}>
-                {isDone ? '✓' : running ? <span className="spinner spinner--sm" style={{ borderTopColor: '#3b82f6' }} /> : failed ? '✕' : i + 1}
-              </div>
-              {i < STEPS.length - 1 && <div className="stepper-step__line" />}
+          <span key={label} role="listitem" style={{ display: 'contents' }}>
+            <div className={cls}>
+              {sq}
+              <span className="lbl">{label}</span>
             </div>
-            <div className="stepper-step__label">{label}</div>
-          </div>
+            {i < STEPS.length - 1 && (
+              <div className={`connector${done ? ' done' : ''}`} />
+            )}
+          </span>
         );
       })}
     </div>

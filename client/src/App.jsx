@@ -53,9 +53,9 @@ export default function App() {
 
   if (booting) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: '1rem', flexDirection: 'column' }}>
-        <span className="spinner spinner--lg" />
-        <p className="text-muted">Loading…</p>
+      <div className="page-loading">
+        <span className="spinner lg" />
+        Loading…
       </div>
     );
   }

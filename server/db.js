@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
 
-require('dotenv').config();
+require('./env');
 
 const DEFAULT_DATABASE_PATH = './data/app.db';
 

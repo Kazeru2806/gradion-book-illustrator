@@ -5,6 +5,7 @@ const { randomUUID } = require('crypto');
 const { GoogleGenAI } = require('@google/genai');
 
 const { getDb } = require('./db');
+const { getImagesDir, imageDbPath, imageStoragePath, resolveStoredImagePath } = require('./paths');
 
 const USE_STUB = process.env.GEMINI_USE_STUB === '1';
 
@@ -93,12 +94,8 @@ function savePortraitInteractionId(projectId, interactionId) {
     .run(interactionId, projectId);
 }
 
-function getImagesBase() {
-  return process.env.IMAGES_DIR || '../data/images';
-}
-
 function ensureImageDir(projectId) {
-  const dir = path.resolve(getImagesBase(), projectId);
+  const dir = path.join(getImagesDir(), projectId);
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -135,8 +132,7 @@ function mimeTypeFromPath(filePath) {
   return map[ext] || DEFAULT_IMAGE_MIME_TYPE;
 }
 
-function saveImage(relativePath, base64Data) {
-  const absolutePath = path.resolve(relativePath);
+function saveImage(absolutePath, base64Data) {
   fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
   fs.writeFileSync(absolutePath, Buffer.from(base64Data, 'base64'));
 }
@@ -427,12 +423,12 @@ async function runPortraitsStep(project) {
 
     const { data, mimeType } = extractOutputImage(interaction);
     const ext = extensionFromMimeType(mimeType);
-    const portraitPath = path.join(getImagesBase(), project.id, `${character.id}.${ext}`);
-    saveImage(portraitPath, data);
+    const filename = `${character.id}.${ext}`;
+    saveImage(imageStoragePath(project.id, filename), data);
 
     portraits.push({
       characterId: character.id,
-      portraitPath,
+      portraitPath: imageDbPath(project.id, filename),
     });
 
     previousInteractionId = interaction.id;
@@ -542,8 +538,8 @@ async function runIllustrationsStep(project) {
         throw new Error(`Portrait file missing for character "${character.name}"`);
       }
 
-      const absolutePortraitPath = path.resolve(character.portrait_path);
-      if (!fs.existsSync(absolutePortraitPath)) {
+      const absolutePortraitPath = resolveStoredImagePath(character.portrait_path);
+      if (!absolutePortraitPath || !fs.existsSync(absolutePortraitPath)) {
         throw new Error(`Portrait file not found on disk for character "${character.name}"`);
       }
 
@@ -557,12 +553,12 @@ async function runIllustrationsStep(project) {
     const interaction = await createImageInteraction({ input });
     const { data, mimeType } = extractOutputImage(interaction);
     const ext = extensionFromMimeType(mimeType);
-    const illustrationPath = path.join(getImagesBase(), project.id, `chapter-${chapter.id}.${ext}`);
-    saveImage(illustrationPath, data);
+    const filename = `chapter-${chapter.id}.${ext}`;
+    saveImage(imageStoragePath(project.id, filename), data);
 
     illustrations.push({
       chapterId: chapter.id,
-      illustrationPath,
+      illustrationPath: imageDbPath(project.id, filename),
     });
   }
 
@@ -608,11 +604,11 @@ async function runStepStub(stepKey, project) {
 
       return {
         portraits: characters.map((character) => {
-          const portraitPath = path.join(getImagesBase(), project.id, `${character.id}.jpg`);
-          saveImage(portraitPath, Buffer.from('stub').toString('base64'));
+          const filename = `${character.id}.jpg`;
+          saveImage(imageStoragePath(project.id, filename), Buffer.from('stub').toString('base64'));
           return {
             characterId: character.id,
-            portraitPath,
+            portraitPath: imageDbPath(project.id, filename),
           };
         }),
       };
@@ -645,11 +641,11 @@ async function runStepStub(stepKey, project) {
 
       return {
         illustrations: chapters.map((chapter) => {
-          const illustrationPath = path.join(getImagesBase(), project.id, `chapter-${chapter.id}.jpg`);
-          saveImage(illustrationPath, Buffer.from('stub').toString('base64'));
+          const filename = `chapter-${chapter.id}.jpg`;
+          saveImage(imageStoragePath(project.id, filename), Buffer.from('stub').toString('base64'));
           return {
             chapterId: chapter.id,
-            illustrationPath,
+            illustrationPath: imageDbPath(project.id, filename),
           };
         }),
       };
