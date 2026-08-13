@@ -36,7 +36,14 @@ export default function App() {
   }
 
   function handleProjectCreated(project) {
-    setProjects(prev => [project, ...prev]);
+    setProjects((prev) => [project, ...prev]);
+  }
+
+  function handleProjectDeleted(projectId) {
+    setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    if (activeProjectId === projectId) {
+      setActiveProjectId(null);
+    }
   }
 
   function handleSelectProject(id) {
@@ -79,6 +86,7 @@ export default function App() {
       projects={projects}
       onSelectProject={handleSelectProject}
       onProjectCreated={handleProjectCreated}
+      onProjectDeleted={handleProjectDeleted}
       onSignOut={handleSignOut}
     />
   );

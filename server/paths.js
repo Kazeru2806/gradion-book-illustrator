@@ -1,3 +1,4 @@
+const fs = require('fs');
 const path = require('path');
 
 const SERVER_ROOT = __dirname;
@@ -29,8 +30,16 @@ function resolveStoredImagePath(storedPath) {
   return path.join(SERVER_ROOT, normalized);
 }
 
+function deleteProjectImages(projectId) {
+  const dir = path.join(getImagesDir(), projectId);
+  if (fs.existsSync(dir)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 module.exports = {
   SERVER_ROOT,
+  deleteProjectImages,
   getImagesDir,
   imageDbPath,
   imageStoragePath,

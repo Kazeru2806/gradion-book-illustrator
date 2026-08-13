@@ -182,11 +182,45 @@ function parseJsonOutput(interaction) {
   }
 }
 
+const IMAGE_QUOTA_HELP =
+  'Gemini image models have tighter limits than text. Free-tier accounts often have zero image quota (limit: 0), so portraits fail even when style/characters succeed. Enable billing at https://aistudio.google.com/app/settings/billing and check your image model limits at https://ai.dev/rate-limit. For local UI testing without image quota, set GEMINI_USE_STUB=1 in server/.env.';
+
+function isQuotaError(err) {
+  const message = err instanceof Error ? err.message : String(err);
+  const status =
+    /** @type {{ status?: number, statusCode?: number }} */ (err)?.status ??
+    /** @type {{ status?: number, statusCode?: number }} */ (err)?.statusCode;
+
+  return status === 429 || /\b429\b/.test(message) || /quota|rate[- ]limit|RESOURCE_EXHAUSTED/i.test(message);
+}
+
+function isImageContext(context) {
+  return /image|portrait|illustration/i.test(context);
+}
+
 function wrapGeminiError(err, context) {
-  if (err instanceof Error) {
-    return new Error(`${context}: ${err.message}`);
+  const base = err instanceof Error ? err.message : String(err);
+
+  if (isQuotaError(err) && isImageContext(context)) {
+    return new Error(`${context}: ${base}\n\n${IMAGE_QUOTA_HELP}`);
   }
-  return new Error(`${context}: ${String(err)}`);
+
+  if (err instanceof Error) {
+    return new Error(`${context}: ${base}`);
+  }
+  return new Error(`${context}: ${base}`);
+}
+
+function savePartialPortrait(projectId, characterId, portraitPath) {
+  getDb()
+    .prepare(
+      `
+      UPDATE characters
+      SET portrait_path = ?
+      WHERE id = ? AND project_id = ?
+    `
+    )
+    .run(portraitPath, characterId, projectId);
 }
 
 async function createTextInteraction(params) {
@@ -395,7 +429,7 @@ async function runPortraitsStep(project) {
   }
 
   const characters = getDb()
-    .prepare('SELECT id, name, prompt FROM characters WHERE project_id = ? ORDER BY position')
+    .prepare('SELECT id, name, prompt, portrait_path FROM characters WHERE project_id = ? ORDER BY position')
     .all(project.id)
     .slice(0, 2);
 
@@ -409,6 +443,14 @@ async function runPortraitsStep(project) {
   const portraits = [];
 
   for (const character of characters) {
+    if (character.portrait_path) {
+      portraits.push({
+        characterId: character.id,
+        portraitPath: character.portrait_path,
+      });
+      continue;
+    }
+
     const interaction = await createImageInteraction({
       previous_interaction_id: previousInteractionId,
       input: [
@@ -426,16 +468,18 @@ async function runPortraitsStep(project) {
     const filename = `${character.id}.${ext}`;
     saveImage(imageStoragePath(project.id, filename), data);
 
+    const portraitPath = imageDbPath(project.id, filename);
+    savePartialPortrait(project.id, character.id, portraitPath);
+
     portraits.push({
       characterId: character.id,
-      portraitPath: imageDbPath(project.id, filename),
+      portraitPath,
     });
 
     previousInteractionId = interaction.id;
-  }
-
-  if (previousInteractionId) {
-    savePortraitInteractionId(project.id, previousInteractionId);
+    if (previousInteractionId) {
+      savePortraitInteractionId(project.id, previousInteractionId);
+    }
   }
 
   return { portraits };

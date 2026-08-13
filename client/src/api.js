@@ -44,6 +44,7 @@ export const api = {
     }
     return request('POST', '/projects', { title, book_text: bookText });
   },
+  deleteProject: (id) => request('DELETE', `/projects/${id}`),
 
   runStep: (projectId, stepKey, opts = {}) =>
     request('POST', `/projects/${projectId}/steps/${stepKey}/run`, opts),

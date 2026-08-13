@@ -4,6 +4,7 @@ const { randomUUID } = require('crypto');
 
 const { getDb } = require('../db');
 const { runStep, uploadBookAndInitialize } = require('../gemini');
+const { deleteProjectImages } = require('../paths');
 const { requireAuth } = require('../middleware/requireAuth');
 const { getProjectDetail, getOwnedProject, serializeProjectSummary } = require('../projectHelpers');
 const { STEPS, completeStep, failStep, retryStep, startStep } = require('../pipelineEngine');
@@ -160,6 +161,30 @@ router.get('/:id/book_text', requireAuth, (req, res) => {
     .get(req.params.id, req.userId);
   if (!row) return res.status(404).json({ error: 'Project not found' });
   return res.json({ book_text: row.book_text });
+});
+
+router.delete('/:id', requireAuth, (req, res) => {
+  const db = getDb();
+  const project = getOwnedProject(db, req.params.id, req.userId);
+
+  if (!project) {
+    return res.status(404).json({ error: 'Project not found' });
+  }
+
+  if (project.step_state === 'running') {
+    return res.status(409).json({
+      error: 'Cannot delete a project while a step is running. Wait for it to finish or retry after it fails.',
+    });
+  }
+
+  const deleteProject = db.transaction(() => {
+    db.prepare('DELETE FROM projects WHERE id = ? AND user_id = ?').run(req.params.id, req.userId);
+  });
+
+  deleteProject();
+  deleteProjectImages(req.params.id);
+
+  return res.json({ ok: true });
 });
 
 router.post('/:id/steps/:stepKey/run', requireAuth, async (req, res) => {

@@ -15,40 +15,75 @@ more ways to get subtly wrong under real concurrent access (two requests
 hitting the same file at once). SQLite is still a single file on disk, no
 server process to run, so it doesn't add real operational weight. The cost
 I'm accepting: a native dependency (better-sqlite3, which compiles on
-install) instead of zero dependencies, and slightly more schema/migration
-thinking up front than "just write a JSON blob."
+install) and slightly more schema/migration thinking up front than "just write a JSON blob."
 
-## [Decision 2 — stack choice, once you've actually built with it for a bit]
+## Separate `status` and `step_state`
 
-[What you considered, e.g. Python/FastAPI vs Node/Express. Why Node won —
-probably speed/familiarity. What you gave up.]
+Claude proposed tracking pipeline progress with a single enum. I pushed back:
+one enum can't express "step 3 completed in `status`, step 4 currently
+`running` in `step_state`," which is exactly what a page refresh mid-step
+must read correctly. I split it into `status` (which steps have finished)
+and `step_state` (`idle` / `running` / `failed` plus `step_started_at`).
+The cost is keeping two fields in sync and needing a stale timeout (5
+minutes) so a server crash mid-call doesn't strand a project forever — the
+user gets a force-retry affordance instead of manual DB edits.
 
-## [Decision 3 — how you modeled pipeline progress]
+## Atomic step lock in SQLite, not an in-memory mutex
 
-[Claude proposed / you proposed the two-field status + step_state model —
-write what actually happened once you build this in Phase 3. What did the
-single-enum alternative fail to express? What did splitting it cost you —
-e.g. two fields to keep in sync, needing a stale-timeout to clear a
-stranded step.]
+The AI's first instinct for "no duplicate calls" was an in-process lock map.
+That breaks the moment you have two server processes or restart mid-request.
+I overrode that with an `UPDATE … WHERE step_state = 'idle'` inside a
+`better-sqlite3` immediate transaction: only one request wins, the second
+gets `already_running` and the UI shows the in-flight state. Edge case the
+AI missed: retry must also allow taking over a *stuck* running step
+(`step_started_at` older than the threshold), not only `failed` steps.
 
-## [Decision 4 — how you stopped duplicate execution on refresh/second tab]
+## Image quota is an account constraint, not something the app can bypass
 
-[The transaction-based lock, once implemented. Any place the AI's first
-attempt at this was wrong or missed an edge case — this is a strong
-candidate for one of your required "AI override" entries.]
+The assessment warns to check image-model free-tier limits before starting;
+they are tighter than text. I verified this by probing multiple models with
+`npm run check-quota`: on a free-tier key, **gemini-2.5-flash-image,
+gemini-3.1-flash-image, and gemini-3.1-flash-lite-image all return 429 with
+free_tier limit:0** — switching to an "older" model does not unlock quota.
+Google's pricing page lists "Not available" for free tier on every native
+image model. I did not add automatic model fallback in the app (that would
+burn calls and hide misconfiguration); image model stays in `GEMINI_IMAGE_MODEL`
+and the check script compares candidates so you can see which (if any) work
+on your key. Actionable 429 text, `GEMINI_USE_STUB=1` for tests/local dev,
+and incremental portrait saves remain the honest mitigations. Real image
+generation still requires a billed project for most accounts.
 
-## [Decision 5, 6 — at least one more, plus 2 more AI-override callouts]
+On submission day I could not complete a live Gemini end-to-end run: the text
+model hit the free-tier cap (20 requests/day on `gemini-3.6-flash`) after
+development and quota probing, and all native image models still returned
+429 with `free_tier limit:0`. I recorded a full five-step demo with
+`GEMINI_USE_STUB=1` instead. Backend route tests also use stubs so CI-style
+runs do not burn quota. A reviewer with a billed key can follow README +
+`npm run check-quota` for real portraits and illustrations.
 
-[Spec requires 4-6 decisions total, with AT LEAST 3 being places you
-overrode AI output that was wrong, unsafe, or overcomplicated. Keep a
-running list as you work with Claude Code — every time you say "no, don't
-do that, do X instead," that's a candidate entry. Don't wait until the end
-to reconstruct these from memory.]
+## Incremental portrait persistence during the portraits step
+
+The demo mock fakes instant images; real calls take 30–90s each and we
+generate up to two portraits sequentially. The AI initially returned all
+portrait paths only at `completeStep`, so the UI showed one long wait. I
+save each portrait to disk and update `characters.portrait_path` as soon as
+Gemini returns, while `step_state` stays `running`. The frontend polls every
+3s and shows "1 of 2 ready." On retry after a partial failure, characters
+that already have a portrait are skipped and the image interaction chain
+continues from `portrait_interaction_id`. Cost: partial state visible if
+the step fails mid-way — acceptable because retry is step-scoped and the
+user sees what succeeded.
+
+## Node/Express + React/Vite for speed
+
+I considered Python/FastAPI (matches the reference notebook) but chose
+Node/Express because the Interactions API is well covered by `@google/genai`,
+the assessment allows any stack, and Vite gives fast frontend iteration.
+Trade-off: no shared language with the Colab notebook — I ran the notebook
+once for the pipeline contract, then mapped calls to the JS SDK manually.
 
 ---
 
 ## If I had one more day
 
-[One short, honest answer once you're near the end — what you'd build next
-and why. E.g. retry history UI, SSE instead of polling, sample public-domain
-books to pick from.]
+I'd add retry/attempt history per step (bonus item in the spec) and a happy-path integration test that runs all five steps against `GEMINI_USE_STUB=1` in CI — the spec calls that out as nice-to-have and it would lock the full pipeline contract without spending image quota on every push.

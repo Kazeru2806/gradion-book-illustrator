@@ -77,6 +77,9 @@ function StepActionPanel({ project, onRun, onRetry }) {
   const isRunning = project.step_state === 'running';
   const isFailed = project.step_state === 'failed';
   const isStuck = project.stuck;
+  const portraitCount = project.characters?.length ?? 0;
+  const portraitsReady = project.characters?.filter((c) => c.portrait_path).length ?? 0;
+  const showPortraitProgress = step === 'portraits' && isRunning && portraitCount > 0;
 
   async function handleRun() {
     setBusy(true);
@@ -100,7 +103,9 @@ function StepActionPanel({ project, onRun, onRetry }) {
     <div className="step-panel">
       {isFailed && project.error_message && (
         <div className="error-panel" style={{ marginBottom: 16 }}>
-          <p><strong>{STEP_LABELS[step]} failed:</strong> {project.error_message.split('\n')[0]}</p>
+          <p style={{ whiteSpace: 'pre-wrap', marginBottom: 12 }}>
+            <strong>{STEP_LABELS[step]} failed:</strong> {project.error_message}
+          </p>
           <button
             id={`btn-retry-${step}`}
             type="button"
@@ -133,7 +138,15 @@ function StepActionPanel({ project, onRun, onRetry }) {
       {isRunning && !isStuck && (
         <div className="status-line">
           <span className="spinner sm" />
-          Running <strong>{STEP_LABELS[step]}</strong>… this may take a minute
+          {showPortraitProgress ? (
+            <>
+              Generating portraits — <strong>{portraitsReady} of {portraitCount}</strong> ready…
+            </>
+          ) : (
+            <>
+              Running <strong>{STEP_LABELS[step]}</strong>… this may take a minute
+            </>
+          )}
         </div>
       )}
 
@@ -162,7 +175,7 @@ function StepActionPanel({ project, onRun, onRetry }) {
             {busy ? <>Starting…</> : <>▶ Run {STEP_LABELS[step]}</>}
           </button>
           <p className="help" style={{ marginTop: 12 }}>
-            Each step calls Gemini once. Image steps can take 30–90 seconds.
+            Each step calls Gemini once (portraits: up to 2 image calls). Image steps can take 30–90 seconds and require image-model quota — see README if you hit 429.
           </p>
         </>
       )}
@@ -184,7 +197,11 @@ export default function ProjectDetail({ projectId, onBack }) {
       setLoadError('');
       return data.project;
     } catch (err) {
-      setLoadError(err.message);
+      const message =
+        err.message === 'Failed to fetch'
+          ? 'Could not reach the server. Make sure the API is running (./start.sh) and you are using http://localhost:5173.'
+          : err.message;
+      setLoadError(message);
       return null;
     }
   }, [projectId]);
@@ -310,15 +327,24 @@ export default function ProjectDetail({ projectId, onBack }) {
                   <section style={{ marginBottom: 32 }}>
                     <h3 style={{ fontSize: 16, marginBottom: 16 }}>Characters</h3>
                     <div className="entity-grid">
-                      {project.characters.map((character) => (
+                      {project.characters.map((character) => {
+                        const portraitsRunning =
+                          project.step_state === 'running' &&
+                          project.status === 'CHARACTERS_GENERATED';
+                        const pendingLabel = portraitsRunning && !character.portrait_path
+                          ? 'Generating portrait…'
+                          : 'Portrait pending';
+
+                        return (
                         <EntityCard
                           key={character.id}
                           title={character.name}
                           prompt={character.prompt}
                           imageUrl={api.imageUrl(project.id, character.portrait_path)}
-                          pendingLabel="Portrait pending"
+                          pendingLabel={pendingLabel}
                         />
-                      ))}
+                        );
+                      })}
                     </div>
                   </section>
                 )}

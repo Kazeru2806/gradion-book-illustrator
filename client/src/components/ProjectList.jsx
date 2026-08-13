@@ -111,14 +111,35 @@ function NewProjectForm({ onCreated, onCancel }) {
 
 // ── Project List ──────────────────────────────────────────────────────────────
 
-export default function ProjectList({ user, projects, onSelectProject, onProjectCreated, onSignOut }) {
+export default function ProjectList({ user, projects, onSelectProject, onProjectCreated, onProjectDeleted, onSignOut }) {
   const [showForm, setShowForm] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const initials = (user.name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
   function handleCreated(project) {
     setShowForm(false);
     onProjectCreated(project);
     onSelectProject(project.id);
+  }
+
+  async function handleDelete(project, event) {
+    event.stopPropagation();
+    event.preventDefault();
+
+    const confirmed = window.confirm(
+      `Delete "${project.title}"?\n\nThis removes the project, characters, chapters, and any saved images. This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeletingId(project.id);
+    try {
+      await api.deleteProject(project.id);
+      onProjectDeleted(project.id);
+    } catch (err) {
+      window.alert(err.message || 'Failed to delete project.');
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
@@ -185,6 +206,15 @@ export default function ProjectList({ user, projects, onSelectProject, onProject
                       ) : (
                         <span className={`gd-pill ${cls ?? ''}`}>{label}</span>
                       )}
+                      <button
+                        type="button"
+                        className="gd-btn gd-btn-ghost gd-btn-sm project-delete-btn"
+                        aria-label={`Delete project: ${project.title}`}
+                        disabled={deletingId === project.id}
+                        onClick={(e) => handleDelete(project, e)}
+                      >
+                        {deletingId === project.id ? 'Deleting…' : 'Delete'}
+                      </button>
                     </div>
                   );
                 })}

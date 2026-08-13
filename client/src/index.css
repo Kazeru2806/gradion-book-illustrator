@@ -232,6 +232,8 @@ button { font-family: inherit; }
 .project-row:hover { box-shadow: var(--shadow-card); transform: translateY(-1px); }
 .project-row .title { flex: 1; min-width: 0; }
 .project-row .title h4 { margin: 0 0 3px; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project-row .project-delete-btn { flex-shrink: 0; color: var(--grad-ink-3); }
+.project-row .project-delete-btn:hover:not(:disabled) { color: var(--grad-orange-deep); }
 .progress-mini { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .progress-mini .seg { display: inline-block; width: 18px; height: 4px; border-radius: 2px; background: var(--border-1); flex-shrink: 0; }
 .progress-mini .seg.on { background: var(--grad-orange); }
