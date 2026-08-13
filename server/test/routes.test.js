@@ -6,6 +6,7 @@ const path = require('node:path');
 const http = require('node:http');
 
 process.env.SESSION_SECRET = 'test-session-secret';
+process.env.GEMINI_USE_STUB = '1';
 process.env.DATABASE_PATH = path.join(
   fs.mkdtempSync(path.join(os.tmpdir(), 'routes-test-')),
   'test.db'

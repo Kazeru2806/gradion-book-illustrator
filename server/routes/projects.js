@@ -3,7 +3,7 @@ const multer = require('multer');
 const { randomUUID } = require('crypto');
 
 const { getDb } = require('../db');
-const { runStep, uploadBookText } = require('../gemini');
+const { runStep, uploadBookAndInitialize } = require('../gemini');
 const { requireAuth } = require('../middleware/requireAuth');
 const { getProjectDetail, getOwnedProject, serializeProjectSummary } = require('../projectHelpers');
 const { STEPS, completeStep, failStep, retryStep, startStep } = require('../pipelineEngine');
@@ -55,7 +55,8 @@ async function executeStep(req, res, { isRetry }) {
   }
 
   try {
-    const resultData = await runStep(stepKey, project);
+    const userStyle = typeof req.body?.style === 'string' ? req.body.style : undefined;
+    const resultData = await runStep(stepKey, project, { userStyle });
     const completed = completeStep(projectId, stepKey, resultData);
 
     if (!completed.ok) {
@@ -119,16 +120,18 @@ router.post('/', requireAuth, upload.single('book_file'), async (req, res) => {
   }
 
   try {
-    const bookFileRef = await uploadBookText(bookText);
+    const { bookFileRef, bookInteractionId } = await uploadBookAndInitialize(bookText, title);
     const projectId = randomUUID();
     const db = getDb();
 
     db.prepare(
       `
-      INSERT INTO projects (id, user_id, title, book_text, book_file_ref, status, step_state)
-      VALUES (?, ?, ?, ?, ?, 'CREATED', 'idle')
+      INSERT INTO projects (
+        id, user_id, title, book_text, book_file_ref, book_interaction_id, status, step_state
+      )
+      VALUES (?, ?, ?, ?, ?, ?, 'CREATED', 'idle')
     `
-    ).run(projectId, req.userId, title, bookText, bookFileRef);
+    ).run(projectId, req.userId, title, bookText, bookFileRef, bookInteractionId);
 
     return res.status(201).json({
       project: getProjectDetail(db, projectId, req.userId),
@@ -148,6 +151,15 @@ router.get('/:id', requireAuth, (req, res) => {
   }
 
   return res.json({ project });
+});
+
+router.get('/:id/book_text', requireAuth, (req, res) => {
+  const db = getDb();
+  const row = db
+    .prepare('SELECT book_text FROM projects WHERE id = ? AND user_id = ?')
+    .get(req.params.id, req.userId);
+  if (!row) return res.status(404).json({ error: 'Project not found' });
+  return res.json({ book_text: row.book_text });
 });
 
 router.post('/:id/steps/:stepKey/run', requireAuth, async (req, res) => {
