@@ -1,12 +1,10 @@
 require('dotenv').config();
 
-const express = require('express');
+const app = require('./app');
 const { getDb } = require('./db');
 
 getDb();
 
-const app = express();
+const port = Number(process.env.PORT) || 3001;
 
-app.get('/api/health', (req, res) => res.json({ ok: true }));
-
-app.listen(3001, () => console.log('API on :3001'));
+app.listen(port, () => console.log(`API on :${port}`));
